@@ -1,50 +1,37 @@
 #!/bin/bash
 
-# enironment
-IMAGE_SIZE=224
-ARCHITECTURE="mobilenet_0.50_${IMAGE_SIZE}"
 
-clear
-echo 'Optimizing for inference'
-python -m tensorflow.python.tools.optimize_for_inference \
-  --input=tf_files/retrained_graph.pb \
-  --output=tf_files/optimized_graph.pb \
-  --input_names="input" \
-  --output_names="final_result"
+split_one(){
+	
 
-du -h tf_files/optimized_graph.pb
+	filename=$1
+	name=$(echo "$filename" | cut -f 1 -d '.')
+	clear
+	echo "___ $name ___"
+	echo
 
+	sourcefile="video/${filename}"
+	destination="tf_files/training_set/$name"
+	mkdir $destination
 
-echo
-echo 'quantize_graph'
-python -m scripts.quantize_graph \
-  --input=tf_files/optimized_graph.pb \
-  --output=tf_files/rounded_graph.pb \
-  --output_node_names=final_result \
-  --mode=weights_rounded
+	echo "Splitting $sourcefile into $destination directory"
 
-echo
-echo 'compressing'
-gzip -c tf_files/rounded_graph.pb > tf_files/rounded_graph.pb.gz
+	ffmpeg -i $sourcefile -r 4 $destination/$name%05d.jpg
+	echo
+	count="ls $destination | wc -l"
+	echo "$(eval $count) jpeg files added to $destination"
+}
 
-gzip -l tf_files/rounded_graph.pb.gz
+for file in $(eval ls video)
+do
+	split_one $file
+done
 
 echo
-echo 'pb files are:'
-ls -la tf_files/*.pb*
-
+echo "$(eval ls -la tf_files/training_set | wc -l) directories in training_set"
 echo
-echo 'copying graph'
-cp tf_files/rounded_graph.pb android/tfmobile/assets/graph.pb
-echo 'copying labels'
-cp tf_files/retrained_labels.txt android/tfmobile/assets/labels.txt 
-ls -la android/tfmobile/assets/
-
-echo 
-echo 'testing the copied file with shoe.jpg'
-python -m scripts.label_image \
-  --graph=android/tfmobile/assets/graph.pb  \
-  --image=test_images/shoe.jpg
-
+ls -la tf_files/training_set
 echo
-echo 'rebuild the android project'
+echo "___ done ___"
+echo
+
